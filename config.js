@@ -4,9 +4,6 @@ window.HASI_CONFIG = {
   // Si se deja vacía, la página funciona en MODO DEMO con datos de ejemplo.
   DATA_URL: "",
 
-  // Cada cuántos segundos se consulta el Google Sheet.
-  REFRESH_SECONDS: 15,
-
   // Cómo mostrar los nombres públicamente:
   //   "completo" → Maryuri Lizeth Cardoso
   //   "corto"    → Maryuri C.

@@ -2,7 +2,6 @@
   "use strict";
 
   var CFG = window.HASI_CONFIG || {};
-  var REFRESH = Math.max(5, Number(CFG.REFRESH_SECONDS) || 15) * 1000;
   var DEMO = !CFG.DATA_URL;
 
   var $ = function (id) { return document.getElementById(id); };
@@ -15,7 +14,8 @@
 
   var registros = [];          // más reciente primero
   var known = null;            // Set de claves ya vistas (null = primera carga)
-  var lastOk = null;
+  var version = "";            // última versión recibida del Apps Script
+  var inFlight = false, fails = 0;
   var shownTotal = 0;
 
   /* ---------- utilidades ---------- */
@@ -147,11 +147,6 @@
     els.live.classList.toggle("is-error", !ok);
     els.liveText.textContent = text;
   }
-  function tickLive() {
-    if (!lastOk) return;
-    var s = Math.round((Date.now() - lastOk) / 1000);
-    setLive(true, (DEMO ? "Modo demo · " : "En vivo · ") + "actualizado hace " + s + " s");
-  }
 
   /* ---------- datos ---------- */
   function apply(raw) {
@@ -172,15 +167,36 @@
     else if (nuevos.length > 1) toast("💗 ¡" + nuevos.length + " nuevas registradas!");
   }
 
-  function load() {
-    var p = DEMO ? Promise.resolve(Demo.get()) :
-      fetch(CFG.DATA_URL + (CFG.DATA_URL.indexOf("?") === -1 ? "?" : "&") + "_=" + Date.now(), { cache: "no-store" })
-        .then(function (res) { if (!res.ok) throw new Error(res.status); return res.json(); })
-        .then(function (j) { return j.registros || []; });
+  // Consulta en espera: el Apps Script no responde hasta que hay un registro
+  // nuevo (o pasan ~25 s). Apenas responde, se vuelve a preguntar.
+  function request() {
+    if (DEMO) return Demo.wait(version);
+    var url = CFG.DATA_URL + (CFG.DATA_URL.indexOf("?") === -1 ? "?" : "&") +
+      "since=" + encodeURIComponent(version) + "&_=" + Date.now();
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, 60000);
+    return fetch(url, { cache: "no-store", signal: ctrl.signal })
+      .then(function (res) { if (!res.ok) throw new Error(res.status); return res.json(); })
+      .finally(function () { clearTimeout(timer); });
+  }
 
-    return p.then(function (rows) { apply(rows); lastOk = Date.now(); tickLive(); })
-      .catch(function () { setLive(false, "Reconectando…"); })
-      .then(function () { setTimeout(load, REFRESH); });
+  function poll() {
+    // Pestaña oculta → no ocupar una de las ejecuciones simultáneas de Google.
+    if (inFlight || document.hidden) return;
+    inFlight = true;
+    request().then(function (j) {
+      inFlight = false;
+      fails = 0;
+      setLive(true, DEMO ? "Modo demo · en vivo" : "En vivo");
+      if (j.cambio) apply(j.registros || []);
+      if (j.version) version = String(j.version);
+      setTimeout(poll, 200);
+    }).catch(function () {
+      inFlight = false;
+      fails++;
+      setLive(false, "Reconectando…");
+      setTimeout(poll, Math.min(30000, 2000 * Math.pow(2, fails - 1)));
+    });
   }
 
   /* ---------- modo demo ---------- */
@@ -206,12 +222,22 @@
     for (var i = 103; i > 0; i--) rows.push(one(new Date(now - i * i * 2.7e5)));
     rows[rows.length - 1] = { t: new Date(now - 4e5).toISOString(), nombre: "Maryuri Lizeth Cardoso", estadoCivil: "Soltera",
       congrega: "No", iglesia: "Ninguna", canal: "Por redes sociales" };
-    var calls = 0;
-    return { get: function () { if (calls++ > 0 && calls % 2 === 0) rows.push(one(new Date())); return rows.slice(); } };
+    var v = 1;
+    // Simula al Apps Script: la primera vez responde enseguida; después
+    // "espera" hasta que llega una nueva registrada (cada 6–12 s).
+    return { wait: function (since) {
+      if (String(since) !== String(v)) return Promise.resolve({ cambio: true, version: String(v), registros: rows.slice() });
+      return new Promise(function (ok) {
+        setTimeout(function () {
+          rows.push(one(new Date())); v++;
+          ok({ cambio: true, version: String(v), registros: rows.slice() });
+        }, 6000 + Math.random() * 6000);
+      });
+    } };
   })();
 
   els.search.addEventListener("input", function () { renderList(null); });
-  setInterval(tickLive, 1000);
   setInterval(function () { renderList(null); }, 60000); // refresca los "hace X min"
-  load();
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) poll(); });
+  poll();
 })();
