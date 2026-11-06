@@ -5,13 +5,13 @@ Página estática que muestra en tiempo real las mujeres registradas al congreso
 la página pregunta, el script espera hasta que llega un registro del formulario y responde
 al instante (1–2 s). Sin bases de datos ni servicios externos.
 
-- **Celulares solo para el equipo**: la página pública muestra nombres. Con el botón **🔒 Acceso equipo** (pie de página) y la clave `CLAVE_EQUIPO` del Apps Script se ven los celulares con enlace de llamada y WhatsApp. La clave se guarda solo en ese navegador; "Salir del modo equipo" la borra. En modo demo la clave es `demo`.
+- **Celulares públicos**: cada tarjeta muestra el celular con enlace de llamada y WhatsApp, visible para cualquiera con el enlace.
 - Sin `DATA_URL` configurada, la página corre en **modo demo** con datos de ejemplo.
 
 ## Conectar con el Google Sheet
 
 1. Abre el Google Sheet de respuestas → **Extensiones → Apps Script**.
-2. Borra el contenido y pega `apps-script/Code.gs`. Cambia `CLAVE_EQUIPO` por una clave propia. Guarda.
+2. Borra el contenido y pega `apps-script/Code.gs`. Guarda.
 3. En la barra superior elige la función **`instalar`** y pulsa **▶ Ejecutar**. Acepta los permisos.
    Esto crea el disparador que avisa cada vez que llega una respuesta (o editas el Sheet).
 4. **Implementar → Nueva implementación → Tipo: Aplicación web**

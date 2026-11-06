@@ -9,19 +9,15 @@
     total: $("total"), today: $("todayText"), live: $("live"), liveText: $("liveText"),
     statToday: $("statToday"), statCongrega: $("statCongrega"), statIglesias: $("statIglesias"),
     barsCanal: $("barsCanal"), barsCivil: $("barsCivil"),
-    grid: $("grid"), empty: $("empty"), search: $("search"), toast: $("toast"),
-    teamBtn: $("teamBtn"), teamBar: $("teamBar")
+    grid: $("grid"), empty: $("empty"), search: $("search"), toast: $("toast")
   };
 
   var registros = [];          // más reciente primero
   var known = null;            // Set de claves ya vistas (null = primera carga)
   var version = "";            // última versión recibida del Apps Script
   var inFlight = false, fails = 0;
-  var ctrl = null, restarting = false;
-  var STORE = "hasi_clave_equipo";
-  var clave = "";              // clave del equipo (solo en este navegador)
-  var equipo = false;          // el Apps Script confirmó la clave
-  try { clave = localStorage.getItem(STORE) || ""; } catch (e) {}
+  // Limpia la clave guardada por la versión anterior de la página.
+  try { localStorage.removeItem("hasi_clave_equipo"); } catch (e) {}
   var shownTotal = 0;
 
   /* ---------- utilidades ---------- */
@@ -129,7 +125,7 @@
     var q = norm(els.search.value);
     var qd = q.replace(/\D/g, "");
     var list = q ? registros.filter(function (r) {
-      return norm(r.nombre).indexOf(q) !== -1 || (equipo && qd.length >= 3 && digits(r.celular).indexOf(qd) !== -1);
+      return norm(r.nombre).indexOf(q) !== -1 || (qd.length >= 3 && digits(r.celular).indexOf(qd) !== -1);
     }) : registros;
     var n = registros.length;
     els.grid.innerHTML = list.map(function (r) {
@@ -147,36 +143,12 @@
   function digits(s) { return String(s || "").replace(/\D/g, ""); }
   function fmtPhone(d) { return d.length === 10 ? d.slice(0, 3) + " " + d.slice(3, 6) + " " + d.slice(6) : d; }
   function phoneHtml(r) {
-    if (!equipo) return "";
     var d = digits(r.celular);
     if (!d) return '<p class="card__tel">Sin celular</p>';
     var wa = d.length === 10 ? "57" + d : d;  // Colombia
     return '<p class="card__tel"><a href="tel:+' + esc(wa) + '">📞 ' + esc(fmtPhone(d)) + '</a>' +
       '<a class="wa" href="https://wa.me/' + esc(wa) + '" target="_blank" rel="noopener">WhatsApp</a></p>';
   }
-
-  /* ---------- acceso del equipo ---------- */
-  function renderTeam() {
-    els.teamBar.hidden = !equipo;
-    els.teamBtn.textContent = equipo ? "Salir del modo equipo" : "🔒 Acceso equipo";
-    els.search.placeholder = equipo ? "Busca por nombre o celular…" : "Escribe tu nombre…";
-  }
-  function saveClave(v) {
-    clave = v;
-    try { v ? localStorage.setItem(STORE, v) : localStorage.removeItem(STORE); } catch (e) {}
-  }
-  // Pide los datos de nuevo, ahora (o ya no) con la clave.
-  function restart() {
-    version = "";
-    if (ctrl) { restarting = true; ctrl.abort(); } else poll();
-  }
-  els.teamBtn.addEventListener("click", function () {
-    if (equipo || clave) { saveClave(""); equipo = false; renderTeam(); renderList(null); restart(); return; }
-    var v = window.prompt("Clave del equipo:");
-    if (!v || !v.trim()) return;
-    saveClave(v.trim());
-    restart();
-  });
 
   var toastTimer;
   function toast(msg) {
@@ -213,10 +185,10 @@
   // Consulta en espera: el Apps Script no responde hasta que hay un registro
   // nuevo (o pasan ~25 s). Apenas responde, se vuelve a preguntar.
   function request() {
-    var c = ctrl = new AbortController();
-    if (DEMO) return Demo.wait(version, clave, c.signal);
+    var c = new AbortController();
+    if (DEMO) return Demo.wait(version);
     var url = CFG.DATA_URL + (CFG.DATA_URL.indexOf("?") === -1 ? "?" : "&") +
-      "since=" + encodeURIComponent(version) + (clave ? "&clave=" + encodeURIComponent(clave) : "") + "&_=" + Date.now();
+      "since=" + encodeURIComponent(version) + "&_=" + Date.now();
     var timer = setTimeout(function () { c.abort(); }, 60000);
     return fetch(url, { cache: "no-store", signal: c.signal })
       .then(function (res) { if (!res.ok) throw new Error(res.status); return res.json(); })
@@ -228,22 +200,14 @@
     if (inFlight || document.hidden) return;
     inFlight = true;
     request().then(function (j) {
-      inFlight = false; ctrl = null;
+      inFlight = false;
       fails = 0;
       setLive(true, DEMO ? "Modo demo · en vivo" : "En vivo");
-      if (j.cambio) {
-        var antes = equipo;
-        equipo = !!j.equipo;
-        if (clave && !equipo) { saveClave(""); toast("Clave incorrecta"); }
-        else if (equipo && !antes) toast("🔓 Modo equipo: celulares visibles");
-        renderTeam();
-        apply(j.registros || []);
-      }
+      if (j.cambio) apply(j.registros || []);
       if (j.version) version = String(j.version);
       setTimeout(poll, 200);
     }).catch(function () {
-      inFlight = false; ctrl = null;
-      if (restarting) { restarting = false; poll(); return; }
+      inFlight = false;
       fails++;
       setLive(false, "Reconectando…");
       setTimeout(poll, Math.min(30000, 2000 * Math.pow(2, fails - 1)));
@@ -277,18 +241,11 @@
     var v = 1;
     // Simula al Apps Script: la primera vez responde enseguida; después
     // "espera" hasta que llega una nueva registrada (cada 6–12 s).
-    // En demo la clave del equipo es "demo".
-    function out(clave) {
-      var eq = clave === "demo";
-      return { cambio: true, version: String(v), equipo: eq, registros: rows.map(function (r) {
-        var o = {}; for (var k in r) if (k !== "celular" || eq) o[k] = r[k]; return o;
-      }) };
-    }
-    return { wait: function (since, clave, signal) {
-      if (String(since) !== String(v)) return Promise.resolve(out(clave));
-      return new Promise(function (ok, fail) {
-        var t = setTimeout(function () { rows.push(one(new Date())); v++; ok(out(clave)); }, 6000 + Math.random() * 6000);
-        signal.addEventListener("abort", function () { clearTimeout(t); fail(new Error("abort")); });
+    function out() { return { cambio: true, version: String(v), registros: rows.slice() }; }
+    return { wait: function (since) {
+      if (String(since) !== String(v)) return Promise.resolve(out());
+      return new Promise(function (ok) {
+        setTimeout(function () { rows.push(one(new Date())); v++; ok(out()); }, 6000 + Math.random() * 6000);
       });
     } };
   })();
@@ -296,6 +253,5 @@
   els.search.addEventListener("input", function () { renderList(null); });
   setInterval(function () { renderList(null); }, 60000); // refresca los "hace X min"
   document.addEventListener("visibilitychange", function () { if (!document.hidden) poll(); });
-  renderTeam();
   poll();
 })();
