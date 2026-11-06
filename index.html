@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=4">
+  <link rel="stylesheet" href="styles.css?v=5">
 </head>
 <body>
 
@@ -38,6 +38,7 @@
       <p class="counter__label">Mujeres registradas</p>
       <p class="counter__number" id="total">0</p>
       <p class="counter__sub">y contando… <span id="todayText"></span></p>
+      <p class="counter__asis" id="asisText"></p>
     </div>
   </section>
 
@@ -69,9 +70,16 @@
   <!-- LISTADO -->
   <section class="list container">
     <div class="list__head">
-      <h2 class="list__title">¿Ya estás registrada?</h2>
-      <p class="list__hint">Busca tu nombre en la lista de inscritas</p>
+      <h2 class="list__title">Asistencia</h2>
+      <p class="list__hint">Busca a la registrada y marca su llegada</p>
+      <div class="seg seg--dias" id="dias" role="group" aria-label="Día del congreso"></div>
+      <p class="asis-resumen" id="asisResumen"></p>
       <input class="search" id="search" type="search" placeholder="Busca por nombre o celular…" autocomplete="off">
+      <div class="seg seg--filtros" id="filtros" role="group" aria-label="Filtrar">
+        <button type="button" data-f="todas">Todas</button>
+        <button type="button" data-f="faltan">Faltan</button>
+        <button type="button" data-f="asistieron">Asistieron</button>
+      </div>
     </div>
     <ol class="grid" id="grid" aria-live="polite"></ol>
     <p class="empty" id="empty" hidden>No encontramos ese nombre. Si te registraste hace poco, espera unos segundos.</p>
@@ -84,7 +92,7 @@
 
   <div class="toast" id="toast" role="status"></div>
 
-  <script src="config.js?v=4"></script>
-  <script src="app.js?v=4"></script>
+  <script src="config.js?v=5"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>

@@ -6,6 +6,7 @@ la página pregunta, el script espera hasta que llega un registro del formulario
 al instante (1–2 s). Sin bases de datos ni servicios externos.
 
 - **Celulares públicos**: cada tarjeta muestra el celular con enlace de llamada y WhatsApp, visible para cualquiera con el enlace.
+- **Asistencia** (viernes 6, sábado 7, domingo 8): cada tarjeta tiene un botón para marcar la llegada del día elegido. Se guarda en la pestaña **Asistencia** del mismo Sheet (una fila por marca: ID registro, nombre, celular, día, fecha y hora) y se ve al instante en todas las pantallas. Cualquiera con el enlace puede marcar o desmarcar.
 - Sin `DATA_URL` configurada, la página corre en **modo demo** con datos de ejemplo.
 
 ## Conectar con el Google Sheet
