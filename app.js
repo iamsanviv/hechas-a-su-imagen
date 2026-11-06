@@ -9,13 +9,19 @@
     total: $("total"), today: $("todayText"), live: $("live"), liveText: $("liveText"),
     statToday: $("statToday"), statCongrega: $("statCongrega"), statIglesias: $("statIglesias"),
     barsCanal: $("barsCanal"), barsCivil: $("barsCivil"),
-    grid: $("grid"), empty: $("empty"), search: $("search"), toast: $("toast")
+    grid: $("grid"), empty: $("empty"), search: $("search"), toast: $("toast"),
+    teamBtn: $("teamBtn"), teamBar: $("teamBar")
   };
 
   var registros = [];          // más reciente primero
   var known = null;            // Set de claves ya vistas (null = primera carga)
   var version = "";            // última versión recibida del Apps Script
   var inFlight = false, fails = 0;
+  var ctrl = null, restarting = false;
+  var STORE = "hasi_clave_equipo";
+  var clave = "";              // clave del equipo (solo en este navegador)
+  var equipo = false;          // el Apps Script confirmó la clave
+  try { clave = localStorage.getItem(STORE) || ""; } catch (e) {}
   var shownTotal = 0;
 
   /* ---------- utilidades ---------- */
@@ -121,7 +127,10 @@
 
   function renderList(newKeys) {
     var q = norm(els.search.value);
-    var list = q ? registros.filter(function (r) { return norm(r.nombre).indexOf(q) !== -1; }) : registros;
+    var qd = q.replace(/\D/g, "");
+    var list = q ? registros.filter(function (r) {
+      return norm(r.nombre).indexOf(q) !== -1 || (equipo && qd.length >= 3 && digits(r.celular).indexOf(qd) !== -1);
+    }) : registros;
     var n = registros.length;
     els.grid.innerHTML = list.map(function (r) {
       var meta = iglesia(r) || "Bienvenida al congreso";
@@ -129,11 +138,45 @@
       return '<li class="card' + (newKeys && newKeys[key(r)] ? " is-new" : "") + '">' +
         '<span class="avatar">' + esc(initials(r.nombre)) + '</span>' +
         '<div class="card__body"><p class="card__name">' + esc(displayName(r.nombre)) + '</p>' +
-        '<p class="card__meta">' + esc(meta) + ' · ' + esc(timeAgo(r._d)) + '</p></div>' +
+        '<p class="card__meta">' + esc(meta) + ' · ' + esc(timeAgo(r._d)) + '</p>' + phoneHtml(r) + '</div>' +
         '<span class="card__num">#' + num + '</span></li>';
     }).join("");
     els.empty.hidden = list.length > 0 || !q;
   }
+
+  function digits(s) { return String(s || "").replace(/\D/g, ""); }
+  function fmtPhone(d) { return d.length === 10 ? d.slice(0, 3) + " " + d.slice(3, 6) + " " + d.slice(6) : d; }
+  function phoneHtml(r) {
+    if (!equipo) return "";
+    var d = digits(r.celular);
+    if (!d) return '<p class="card__tel">Sin celular</p>';
+    var wa = d.length === 10 ? "57" + d : d;  // Colombia
+    return '<p class="card__tel"><a href="tel:+' + esc(wa) + '">📞 ' + esc(fmtPhone(d)) + '</a>' +
+      '<a class="wa" href="https://wa.me/' + esc(wa) + '" target="_blank" rel="noopener">WhatsApp</a></p>';
+  }
+
+  /* ---------- acceso del equipo ---------- */
+  function renderTeam() {
+    els.teamBar.hidden = !equipo;
+    els.teamBtn.textContent = equipo ? "Salir del modo equipo" : "🔒 Acceso equipo";
+    els.search.placeholder = equipo ? "Busca por nombre o celular…" : "Escribe tu nombre…";
+  }
+  function saveClave(v) {
+    clave = v;
+    try { v ? localStorage.setItem(STORE, v) : localStorage.removeItem(STORE); } catch (e) {}
+  }
+  // Pide los datos de nuevo, ahora (o ya no) con la clave.
+  function restart() {
+    version = "";
+    if (ctrl) { restarting = true; ctrl.abort(); } else poll();
+  }
+  els.teamBtn.addEventListener("click", function () {
+    if (equipo || clave) { saveClave(""); equipo = false; renderTeam(); renderList(null); restart(); return; }
+    var v = window.prompt("Clave del equipo:");
+    if (!v || !v.trim()) return;
+    saveClave(v.trim());
+    restart();
+  });
 
   var toastTimer;
   function toast(msg) {
@@ -152,7 +195,7 @@
   function apply(raw) {
     var next = raw.map(function (r) {
       return { t: clean(r.t), nombre: clean(r.nombre), estadoCivil: r.estadoCivil, congrega: r.congrega,
-        iglesia: r.iglesia, canal: r.canal, _d: parseDate(r.t) };
+        iglesia: r.iglesia, canal: r.canal, celular: r.celular, _d: parseDate(r.t) };
     }).filter(function (r) { return r.nombre; });
     next.sort(function (a, b) { return (b._d || 0) - (a._d || 0); });
 
@@ -170,12 +213,12 @@
   // Consulta en espera: el Apps Script no responde hasta que hay un registro
   // nuevo (o pasan ~25 s). Apenas responde, se vuelve a preguntar.
   function request() {
-    if (DEMO) return Demo.wait(version);
+    var c = ctrl = new AbortController();
+    if (DEMO) return Demo.wait(version, clave, c.signal);
     var url = CFG.DATA_URL + (CFG.DATA_URL.indexOf("?") === -1 ? "?" : "&") +
-      "since=" + encodeURIComponent(version) + "&_=" + Date.now();
-    var ctrl = new AbortController();
-    var timer = setTimeout(function () { ctrl.abort(); }, 60000);
-    return fetch(url, { cache: "no-store", signal: ctrl.signal })
+      "since=" + encodeURIComponent(version) + (clave ? "&clave=" + encodeURIComponent(clave) : "") + "&_=" + Date.now();
+    var timer = setTimeout(function () { c.abort(); }, 60000);
+    return fetch(url, { cache: "no-store", signal: c.signal })
       .then(function (res) { if (!res.ok) throw new Error(res.status); return res.json(); })
       .finally(function () { clearTimeout(timer); });
   }
@@ -185,14 +228,22 @@
     if (inFlight || document.hidden) return;
     inFlight = true;
     request().then(function (j) {
-      inFlight = false;
+      inFlight = false; ctrl = null;
       fails = 0;
       setLive(true, DEMO ? "Modo demo · en vivo" : "En vivo");
-      if (j.cambio) apply(j.registros || []);
+      if (j.cambio) {
+        var antes = equipo;
+        equipo = !!j.equipo;
+        if (clave && !equipo) { saveClave(""); toast("Clave incorrecta"); }
+        else if (equipo && !antes) toast("🔓 Modo equipo: celulares visibles");
+        renderTeam();
+        apply(j.registros || []);
+      }
       if (j.version) version = String(j.version);
       setTimeout(poll, 200);
     }).catch(function () {
-      inFlight = false;
+      inFlight = false; ctrl = null;
+      if (restarting) { restarting = false; poll(); return; }
       fails++;
       setLive(false, "Reconectando…");
       setTimeout(poll, Math.min(30000, 2000 * Math.pow(2, fails - 1)));
@@ -215,23 +266,29 @@
     function one(date) {
       var cong = rnd([1, 1, 1, 0]);
       return { t: date.toISOString(), nombre: rnd(nombres) + " " + rnd(apellidos) + " " + rnd(apellidos),
-        estadoCivil: rnd(civil), congrega: cong ? "Sí" : "No", iglesia: cong ? rnd(iglesias) : "Ninguna", canal: rnd(canal) };
+        estadoCivil: rnd(civil), congrega: cong ? "Sí" : "No", iglesia: cong ? rnd(iglesias) : "Ninguna", canal: rnd(canal),
+        celular: "3" + String(100000000 + Math.floor((seed / 233280) * 899999999)) };
     }
     var rows = [];
     var now = Date.now();
     for (var i = 103; i > 0; i--) rows.push(one(new Date(now - i * i * 2.7e5)));
     rows[rows.length - 1] = { t: new Date(now - 4e5).toISOString(), nombre: "Maryuri Lizeth Cardoso", estadoCivil: "Soltera",
-      congrega: "No", iglesia: "Ninguna", canal: "Por redes sociales" };
+      congrega: "No", iglesia: "Ninguna", canal: "Por redes sociales", celular: "3122561075" };
     var v = 1;
     // Simula al Apps Script: la primera vez responde enseguida; después
     // "espera" hasta que llega una nueva registrada (cada 6–12 s).
-    return { wait: function (since) {
-      if (String(since) !== String(v)) return Promise.resolve({ cambio: true, version: String(v), registros: rows.slice() });
-      return new Promise(function (ok) {
-        setTimeout(function () {
-          rows.push(one(new Date())); v++;
-          ok({ cambio: true, version: String(v), registros: rows.slice() });
-        }, 6000 + Math.random() * 6000);
+    // En demo la clave del equipo es "demo".
+    function out(clave) {
+      var eq = clave === "demo";
+      return { cambio: true, version: String(v), equipo: eq, registros: rows.map(function (r) {
+        var o = {}; for (var k in r) if (k !== "celular" || eq) o[k] = r[k]; return o;
+      }) };
+    }
+    return { wait: function (since, clave, signal) {
+      if (String(since) !== String(v)) return Promise.resolve(out(clave));
+      return new Promise(function (ok, fail) {
+        var t = setTimeout(function () { rows.push(one(new Date())); v++; ok(out(clave)); }, 6000 + Math.random() * 6000);
+        signal.addEventListener("abort", function () { clearTimeout(t); fail(new Error("abort")); });
       });
     } };
   })();
@@ -239,5 +296,6 @@
   els.search.addEventListener("input", function () { renderList(null); });
   setInterval(function () { renderList(null); }, 60000); // refresca los "hace X min"
   document.addEventListener("visibilitychange", function () { if (!document.hidden) poll(); });
+  renderTeam();
   poll();
 })();

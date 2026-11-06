@@ -14,7 +14,8 @@
  *  3. Implementar → Nueva implementación → Aplicación web
  *     (Ejecutar como: Yo · Quién tiene acceso: Cualquier persona).
  *
- * IMPORTANTE: el número de celular NUNCA se envía a la página pública.
+ * Celulares: solo se envían si la petición trae la clave del equipo correcta
+ * (CLAVE_EQUIPO). Sin clave, la página pública ve únicamente los nombres.
  * Columnas esperadas (orden del formulario):
  *   A Marca temporal | B Nombres y apellidos | C Número de celular |
  *   D Estado civil   | E ¿Te congregas?      | F ¿En dónde?         | G ¿Cómo te enteraste?
@@ -22,6 +23,10 @@
 
 // Nombre de la pestaña de respuestas. Vacío = primera pestaña.
 const SHEET_NAME = '';
+
+// Clave para que el equipo vea los celulares. CÁMBIALA por una propia
+// (larga y difícil de adivinar). Nunca la pongas en config.js ni en la página.
+const CLAVE_EQUIPO = 'CAMBIA-ESTA-CLAVE';
 
 // Tiempo máximo que el script espera un registro nuevo antes de responder "sin cambios".
 const ESPERA_MAX_MS = 25000;
@@ -31,7 +36,9 @@ const REVISION_MS = 1000;
 /* ---------------- API pública ---------------- */
 
 function doGet(e) {
-  const since = (e && e.parameter && e.parameter.since) || '';
+  const p = (e && e.parameter) || {};
+  const since = p.since || '';
+  const equipo = claveValida(p.clave);
   let version = leerVersion();
 
   // La página ya tiene la última versión → esperar a que llegue algo nuevo.
@@ -42,15 +49,16 @@ function doGet(e) {
       version = leerVersion();
       if (version !== since) break;
     }
-    if (version === since) return json({ cambio: false, version: version });
+    if (version === since) return json({ cambio: false, version: version, equipo: equipo });
   }
 
   // La versión se lee ANTES que los datos: si entra un registro justo ahora,
   // la próxima consulta lo detecta y no se pierde.
-  const registros = leerRegistros();
+  const registros = leerRegistros(equipo);
   return json({
     cambio: true,
     version: version,
+    equipo: equipo,
     actualizado: new Date().toISOString(),
     total: registros.length,
     registros: registros
@@ -81,6 +89,10 @@ function instalar() {
 
 /* ---------------- Auxiliares ---------------- */
 
+function claveValida(clave) {
+  return !!clave && CLAVE_EQUIPO !== 'CAMBIA-ESTA-CLAVE' && clave === CLAVE_EQUIPO;
+}
+
 function leerVersion() {
   const cache = CacheService.getScriptCache();
   let v = cache.get('version');
@@ -90,21 +102,22 @@ function leerVersion() {
   return v;
 }
 
-function leerRegistros() {
+function leerRegistros(conCelular) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = SHEET_NAME ? ss.getSheetByName(SHEET_NAME) : ss.getSheets()[0];
   return sheet.getDataRange().getValues().slice(1)
     .filter(function (r) { return String(r[1]).trim() !== ''; })
     .map(function (r) {
-      return {
+      const o = {
         t: r[0] instanceof Date ? r[0].toISOString() : String(r[0]),
         nombre: String(r[1]).trim(),
-        // r[2] = celular → se omite a propósito
         estadoCivil: String(r[3]).trim(),
         congrega: String(r[4]).trim(),
         iglesia: String(r[5]).trim(),
         canal: String(r[6]).trim()
       };
+      if (conCelular) o.celular = String(r[2]).trim();
+      return o;
     });
 }
 
