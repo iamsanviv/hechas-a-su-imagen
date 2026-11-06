@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Registradas · Hechas a su Imagen 2026</title>
+  <meta name="description" content="Registros en tiempo real del Congreso de Mujeres Hechas a su Imagen 2026 · Restaurando el Diseño.">
+  <meta name="theme-color" content="#A52C64">
+  <link rel="icon" href="assets/logo-hechas.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- HERO -->
+  <header class="hero">
+    <div class="hero__inner">
+      <p class="hero__kicker">Neiva · Huila &nbsp;·&nbsp; Congreso de Mujeres</p>
+      <img class="hero__logo" src="assets/logo-hechas.png" alt="Hechas a su Imagen">
+      <p class="hero__edition">Edición 2026</p>
+      <div class="hero__chips">
+        <span class="chip">📅 6, 7 y 8 de noviembre 2026</span>
+        <span class="chip">📍 Auditorio Vive Ministerio Internacional</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- LEMA + CONTADOR -->
+  <section class="counter">
+    <div class="counter__card">
+      <img class="counter__lema" src="assets/lema-restaurando-el-diseno.png" alt="Restaurando el Diseño">
+      <div class="counter__live" id="live">
+        <span class="dot"></span>
+        <span id="liveText">Conectando…</span>
+      </div>
+      <p class="counter__label">Mujeres registradas</p>
+      <p class="counter__number" id="total">0</p>
+      <p class="counter__sub">y contando… <span id="todayText"></span></p>
+    </div>
+  </section>
+
+  <!-- ESTADÍSTICAS -->
+  <section class="stats container">
+    <article class="stat">
+      <p class="stat__value" id="statToday">0</p>
+      <p class="stat__label">Registros de hoy</p>
+    </article>
+    <article class="stat">
+      <p class="stat__value" id="statCongrega">0%</p>
+      <p class="stat__label">Se congregan actualmente</p>
+    </article>
+    <article class="stat">
+      <p class="stat__value" id="statIglesias">0</p>
+      <p class="stat__label">Iglesias representadas</p>
+    </article>
+
+    <article class="panel">
+      <h3 class="panel__title">¿Cómo se enteraron?</h3>
+      <div class="bars" id="barsCanal"></div>
+    </article>
+    <article class="panel">
+      <h3 class="panel__title">Estado civil</h3>
+      <div class="bars" id="barsCivil"></div>
+    </article>
+  </section>
+
+  <!-- LISTADO -->
+  <section class="list container">
+    <div class="list__head">
+      <h2 class="list__title">¿Ya estás registrada?</h2>
+      <p class="list__hint">Busca tu nombre en la lista de inscritas</p>
+      <input class="search" id="search" type="search" placeholder="Escribe tu nombre…" autocomplete="off">
+    </div>
+    <ol class="grid" id="grid" aria-live="polite"></ol>
+    <p class="empty" id="empty" hidden>No encontramos ese nombre. Si te registraste hace poco, espera unos segundos.</p>
+  </section>
+
+  <footer class="footer">
+    <p class="footer__big">¡Nos vemos en el congreso!</p>
+    <p>Auditorio Vive Ministerio Internacional · Cra 19 # 10-32 B/ Primero de Mayo · Neiva</p>
+  </footer>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
